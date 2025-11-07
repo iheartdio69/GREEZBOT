@@ -1,0 +1,20 @@
+{
+  "name": "poly-bet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "poly-bet.js",
+  "scripts": {
+    "dev": "node betd.js & node telegram-bet-bot.js",
+    "start-all": "./start-all.sh",
+    "stop-all": "./stop-all.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "telegraf": "^4.16.3"
+  }
+}
+

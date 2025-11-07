@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Polybets Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font:14px/1.5 ui-sans-serif, system-ui, -apple-system; background:#0d0f13; color:#e6eef5; }
+    header { padding:16px 20px; border-bottom:1px solid #1b2230; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .tag { background:#141a24; border:1px solid #2a3447; padding:6px 10px; border-radius:999px; }
+    .link { color:#9bc0ff; text-decoration:none }
+    main { padding:20px; display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background:#0f141d; border:1px solid #202a3b; border-radius:14px; padding:16px; box-shadow:0 2px 16px rgba(0,0,0,.25); }
+    h2 { margin:0 0 10px; font-size:16px; color:#cfe3ff; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .muted { color:#8ba0b5; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:6px 8px; border-bottom:1px dashed #223048; text-align:left; }
+    .green{color:#5bd67a;} .red{color:#ff6b6b;}
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="tag">Polybets</div>
+    <div class="tag" id="last">Last refresh —</div>
+    <div class="tag" id="count">Total —</div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Status</h2>
+      <div class="grid-2">
+        <div><b>Bankroll</b><div id="bk" class="mono">—</div></div>
+        <div><b>High-water</b><div id="hwm" class="mono">—</div></div>
+        <div><b>Odds band</b><div id="odds" class="mono">—</div></div>
+        <div><b>State</b><div id="state" class="mono">—</div></div>
+      </div>
+      <h2 style="margin-top:12px">Recent Bets</h2>
+      <table id="bets"><tbody></tbody></table>
+    </section>
+
+    <section class="card">
+      <h2>Report</h2>
+      <div class="grid-2">
+        <div><b>Total bets</b><div id="tot" class="mono">—</div></div>
+        <div><b>Win rate</b><div id="wr" class="mono">—</div></div>
+        <div><b>PnL (all)</b><div id="pnl" class="mono">—</div></div>
+      </div>
+      <div class="muted" style="margin-top:10px">Last 20:</div>
+      <table id="last20"><tbody></tbody></table>
+    </section>
+
+    <section class="card">
+      <h2>Top Categories</h2>
+      <table id="cats"><tbody></tbody></table>
+      <h2 style="margin-top:12px">Snapshots</h2>
+      <ul id="snaps" style="margin:6px 0 0 18px"></ul>
+    </section>
+  </main>
+
+  <script>
+    async function g(p){ const r = await fetch(p); return r.json(); }
+    const fmt = (n, d=2)=> Number(n).toLocaleString(undefined,{ maximumFractionDigits:d });
+
+    async function refresh() {
+      const [st, intel, rep] = await Promise.all([ g('/status'), g('/intel'), g('/report') ]);
+
+      // header meta
+      document.getElementById('last').textContent = `Last refresh ${intel.lastRefresh||'—'}`;
+      document.getElementById('count').textContent = `Total ${intel.total} (active≈${intel.active})`;
+
+      // status
+      document.getElementById('bk').textContent = fmt(st.bankroll);
+      document.getElementById('hwm').textContent = fmt(st.highWater);
+      document.getElementById('odds').textContent = `[${st.oddsBand.min}–${st.oddsBand.max}]` + (st.planned? ` | planned ${fmt(st.planned.stake)} @ ${st.planned.odds}` : '');
+      document.getElementById('state').textContent = st.paused ? 'PAUSED' : 'ACTIVE';
+
+      const bT = document.querySelector('#bets tbody'); bT.innerHTML='';
+      (st.results||[]).forEach(r=>{
+        const cls = r.result==='W' ? 'green' : 'red';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="${cls}">${r.result}</td><td class="mono">${fmt(r.stake)} @ ${r.odds}</td><td class="mono">${r.pnl>0?'+':''}${fmt(r.pnl)}</td><td class="muted">${new Date(r.ts).toLocaleTimeString()}</td>`;
+        bT.appendChild(tr);
+      });
+
+      // report
+      document.getElementById('tot').textContent = rep.totalBets;
+      document.getElementById('wr').textContent  = rep.winrate + '%';
+      document.getElementById('pnl').textContent = (rep.pnlAll>=0?'+':'') + fmt(rep.pnlAll);
+
+      const rT = document.querySelector('#last20 tbody'); rT.innerHTML='';
+      (rep.last20||[]).forEach(r=>{
+        const cls = r.result==='W' ? 'green' : 'red';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="${cls}">${r.result}</td><td class="mono">${fmt(r.stake)} @ ${r.odds}</td><td class="mono">${r.pnl>0?'+':''}${fmt(r.pnl)}</td><td class="muted">${new Date(r.ts).toLocaleString()}</td>`;
+        rT.appendChild(tr);
+      });
+
+      // categories + snapshots
+      const catT = document.querySelector('#cats tbody'); catT.innerHTML='';
+      (intel.topCategories||[]).forEach(c=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${c.category}</td><td class="mono">${c.count}</td>`;
+        catT.appendChild(tr);
+      });
+
+      const sU = document.getElementById('snaps'); sU.innerHTML='';
+      (intel.snapshots||[]).slice().reverse().forEach(s=>{
+        const li=document.createElement('li');
+        li.textContent = `${s.ts} — ${s.count} markets`;
+        sU.appendChild(li);
+      });
+    }
+    refresh();
+    setInterval(refresh, 15_000);
+  </script>
+</body>
+</html>
